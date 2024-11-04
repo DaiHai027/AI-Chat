@@ -4,6 +4,8 @@ import { googleLogout, useGoogleLogin } from "@react-oauth/google";
 import axios from "axios";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { useUser } from "@/contexts/userContext"; // Import the user context
+
 declare global {
   interface Window {
     gapi: any;
@@ -11,12 +13,13 @@ declare global {
 }
 
 const Login: React.FC = () => {
-  const [userInfo, setUserInfo] = useState(null);
-  const routes = useRouter();
   const [loading, setLoading] = useState(false);
   const [secret, setSecret] = useState(""); // State for the secret input
   const [isSecretCorrect, setIsSecretCorrect] = useState(false); // State to track if the secret is correct
   const [error, setError] = useState(""); // State for error messages
+
+  const router = useRouter();
+  const { setUserData } = useUser(); // Use context to set user data
 
   const handleGoogleLogin = async (accessToken: string) => {
     try {
@@ -28,9 +31,8 @@ const Login: React.FC = () => {
           },
         }
       );
-      setUserInfo(userInfoResponse.data);
-      localStorage.setItem("user", JSON.stringify(userInfoResponse.data));
-      routes.push("/chat");
+      setUserData(userInfoResponse.data); // Update context with user info
+      router.push("/chat"); // Redirect after setting user
       console.log("User Info:", userInfoResponse.data);
     } catch (error) {
       console.error("Login failed:", error);
@@ -39,7 +41,6 @@ const Login: React.FC = () => {
 
   const googleLogin = useGoogleLogin({
     onSuccess: (response: any) => {
-      console.log("Response:", response);
       console.log("Login Success - ID Token:", response.access_token);
       handleGoogleLogin(response.access_token).catch((error) => {
         console.error("Error handling Google login:", error);
@@ -108,12 +109,11 @@ const Login: React.FC = () => {
                       Submit
                     </button>
                     <button
-                      onClick={() => routes.push("https://quickbooks/buy_access")}
+                      onClick={() => router.push("https://quickbooks/buy_access")}
                       className="w-full rounded-lg bg-gradient-to-r from-green-500 to-teal-500 px-4 py-2 mt-4 text-white font-semibold shadow-md transition-transform transform-gpu hover:scale-105 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-teal-400 focus:ring-opacity-75"
                     >
                       Buy Access
                     </button>
-
                   </div>
                 </>
               ) : (

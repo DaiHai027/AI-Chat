@@ -1,13 +1,10 @@
 "use client";
-import { Loadingbar } from "../loadingbar/loading-bar";
-import { ScrollArea } from "../ui/scroll-area";
-import { useChat } from "ai/react";
-import { Markdown } from "../Markdown";
-import clsx from "clsx";
+import { useState } from "react";
 import * as React from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { IoMdLogIn } from "react-icons/io";
 import { useUser } from "@/contexts/userContext";
+import { useChatHistoryContext } from "@/contexts/chatHistoryContext";
 
 const Textarea = ({ onChange, input }: any) => {
   return (
@@ -42,12 +39,9 @@ const Textarea = ({ onChange, input }: any) => {
           type="text"
           placeholder="Type your message..."
           className="max flex-1 rounded-full bg-white px-3 py-1 focus:outline-none"
-          value={input ?? ""}
+          value={input}
           onChange={onChange}
         />
-        {/* <button className="ml-3 rounded-full bg-blue-500 px-4 py-2 text-white hover:bg-blue-600">
-          Send
-        </button> */}
         <button
           type="submit"
           aria-label="Send prompt"
@@ -75,140 +69,48 @@ const Textarea = ({ onChange, input }: any) => {
   );
 };
 
-const Message = React.forwardRef<HTMLDivElement, {
-  role: string;
-  content: string;
-  isStreaming: boolean;
-  scrollToCardNum: number;
-  scrollToRef: any;
-}>(
-  (
-    {
-      scrollToCardNum,
-      role,
-      content,
-      isStreaming,
-      scrollToRef,
-    },
-    ref
-  ) => {
-    return (
-      <div id="chat-editor" className="mb-5" ref={ref}>
-        <div
-          className={`grid grid-cols-9 gap-2 ${role === "user" ? "text-green-600" : ""
-            }`}
-        >
-          {(role !== "user" && role !== "system") && (
-            <div className="font- font-inter  uppercase">
-              <img
-                alt="User"
-                width={35}
-                height={35}
-                className="rounded-full"
-                referrerPolicy="no-referrer"
-                src="https://img.freepik.com/free-vector/graident-ai-robot-vectorart_78370-4114.jpg?size=338&ext=jpg&ga=GA1.1.1023967583.1729468800&semt=ais_hybrid"
-              />
-            </div>
-          )}
-          {
-            role !== 'system' && (
-              <div
-                className={clsx(
-                  "font-inter col-start-2 col-end-9 w-full  bg-white px-4 py-2",
-                  role === "user"
-                    ? "w-3/5 rounded-3xl rounded-br  border-green-600"
-                    : "rounded-3xl  rounded-bl-md",
-                )}
-              >
-                {isStreaming && (
-                  <Loadingbar
-                    color={role == "user" ? "bg-green-700" : "bg-gray-600"}
-                  />
-                )}
-                <div className={clsx("font-inter w-full pl-2 pr-0")}>
-                  <Markdown>{content}</Markdown>
-                </div>
-              </div>
-            )
-          }
-          {role === "user" && (
-            <div className="font- font-inter col-span-1 ml-5 uppercase">
-              <img
-                alt="User"
-                width={32}
-                height={32}
-                className="rounded-full"
-                referrerPolicy="no-referrer"
-                src="https://upload.wikimedia.org/wikipedia/commons/8/89/Portrait_Placeholder.png"
-              />
-            </div>
-          )}
-        </div>
-      </div>
-    );
-  },
-);
-Message.displayName = 'Message';
 
-export const ChatThread = () => {
-  const params = useParams();
-  const [title, setTitle] = React.useState<string>();
-  const chatContainerRef = React.useRef<any>(null);
-  const scrollToRef = React.useRef<any>(null);
+const ChatPage = () => {
+  const {append} = useChatHistoryContext();
   const [isOpen, setIsOpen] = React.useState(false);
   const router = useRouter();
   const { user } = useUser();
-  const formRef = React.useRef<HTMLFormElement>(null); // Create a ref for the form
+  const [input, setInput] = useState("");
 
-  const { handleInputChange, handleSubmit, messages, setMessages, input, isLoading, setInput } =
-    useChat({
-      api: `/api/chat/${params.chatId}`,
-      body: {
-        userId: user?.sub,
-      }
-    });
+  const handleSubmit = async (e: any) => {
+    e.preventDefault();
 
-  React.useEffect(() => {
-    const fetchChats = async () => {
+    if (input.trim()) {
       try {
-        const response = await fetch(`/api/chat/${params.chatId}`);
-        const chats = await response.json();
-        const _messages = chats.chatData.messages;
-        const length = _messages.length;
-        if (_messages[length - 1].role == 'user') {
-          setMessages(_messages.slice(0, length - 1));
-          const programmaticSubmit = (newInput: string) => {
-            setInput(newInput); // Set the input state
-            console.log(formRef)
-            formRef.current?.requestSubmit();
-          }
-          programmaticSubmit(_messages[length - 1].content)
+        // Send the message to /api/chat
+        const response = await fetch("/api/chat", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ message: input, userId: user?.sub }),
+        });
+
+        // Clear input after sending
+        setInput("");
+
+        if (response.ok) {
+          const { chatId, title, timestamp } = await response.json();
+          append({
+            chatId,
+            title,
+            timestamp: timestamp,
+          });
+          // Redirect to /chat/[chatId]
+          router.push(`/chat/${chatId}`);
         } else {
-          setMessages(_messages);
+          console.error("Failed to send message.");
         }
       } catch (error) {
-        console.error("Failed to fetch chat history", error);
+        console.error("Error:", error);
       }
-    };
-    fetchChats();
-  }, [])
-  
-  const scrollToCardNum = messages.length - 1;
-
-  const scrollToBottom = () => {
-    if (chatContainerRef.current) {
-      const container = chatContainerRef.current;
-      container.scrollTop = container.scrollHeight;
     }
-  };
-
-  React.useEffect(() => {
-    const scrollableDiv: any = document.getElementById("chat-editor");
-    scrollableDiv?.scrollTo({
-      top: scrollableDiv.scrollHeight,
-      behavior: "smooth",
-    });
-  }, [messages]);
+  }
 
   return (
     <div className="flex h-full w-full flex-col gap-1 p-4">
@@ -268,7 +170,6 @@ export const ChatThread = () => {
             </button>
           </div>
         </div>
-        <div className=""></div>
       </div>
       <div
         id="chat-editor"
@@ -276,42 +177,23 @@ export const ChatThread = () => {
       >
         <div className="flex h-full w-full flex-col">
           <div className="mx-auto flex-1">
-            <ScrollArea className="flex w-full grow items-center justify-center px-4 pt-2">
-              <div className="h-full w-full ">
-
-                {messages.map((item: any, i: number) => (
-                  <div key={i}>
-                    <Message
-                      role={item.role}
-                      content={item.content}
-                      isStreaming={i === messages.length - 1 && isLoading}
-                      scrollToCardNum={scrollToCardNum} // Set this to the index of the last message.
-                      scrollToRef={scrollToRef}
-                    />
-                  </div>
-                ))}
-              </div>
-            </ScrollArea>
-            {messages.length === 1 && (
-              <div className="sticky bottom-0 w-full h-full flex py-5 justify-center items-center">
-                <div className="w-full justify-center text-center">
-                  <div className="relative inline-flex justify-center text-center text-2xl font-semibold leading-9">
-                    <h1>What can I help with?</h1>
-                    <h1
-                      className="result-streaming absolute left-full transition-opacity"
-                      style={{ opacity: 0 }}
-                    >
-                      <span />
-                    </h1>
-                  </div>
+            <div className="sticky bottom-0 w-full h-full flex py-5 justify-center items-center">
+              <div className="w-full justify-center text-center">
+                <div className="relative inline-flex justify-center text-center text-2xl font-semibold leading-9">
+                  <h1>What can I help with?</h1>
+                  <h1
+                    className="result-streaming absolute left-full transition-opacity"
+                    style={{ opacity: 0 }}
+                  >
+                    <span />
+                  </h1>
                 </div>
               </div>
-
-            )}
+            </div>
           </div>
           <div className="sticky bottom-0 w-full max-w-5xl bg-[#F5F5F5] md:py-10 xs:py-4">
-            <form onSubmit={handleSubmit} className="w-full" ref={formRef}>
-              <Textarea onChange={handleInputChange} input={input} />
+            <form className="w-full" onSubmit={handleSubmit}>
+              <Textarea input = {input} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setInput(e.target.value)} />
             </form>
           </div>
         </div>
@@ -319,3 +201,5 @@ export const ChatThread = () => {
     </div>
   );
 };
+
+export default ChatPage;

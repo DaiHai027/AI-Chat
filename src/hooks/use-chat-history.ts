@@ -1,10 +1,9 @@
 import { create } from "zustand";
 
 type ChatObject = {
-    id: string;
+    chatId: string;
     title: string;
-    messages: number;
-    createdAt: Date;
+    timestamp: Date;
 };
 type ChatState = {
     list: ChatObject[];
@@ -16,15 +15,15 @@ type ChatState = {
 export const useChatHistory = create<ChatState>((set) => ({
     list: [],
     append: (p: ChatObject) => set((state) => ({ list: [...state.list, p] })),
-    update: (id, chatObject) =>
+    update: (chatId, chatObject) =>
         set((state) => {
             if (state.list.length === 0) {
                 return {
-                    list: [{ ...chatObject, createdAt: new Date(), id }],
+                    list: [{ ...chatObject, timestamp: new Date(), chatId }],
                 } as ChatState;
             } else {
         const list = state.list.map((item) => {
-            if (item.id === id) {
+            if (item.chatId === chatId) {
                 return { ...item, ...chatObject };
             }
             return item;
